@@ -44,3 +44,8 @@ sudo apt-get install apt-transport-https --yes
 echo "deb https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
 sudo apt-get update
 sudo apt-get install helm
+
+# Repo
+
+curl -LOk https://github.com/denadr/SpringTCH16Demo/archive/master.zip --output SpringTCH16Demo.zip
+unzip SpringTCH16Demo.zip -d .
