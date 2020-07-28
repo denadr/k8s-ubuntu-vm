@@ -16,7 +16,8 @@
         "ipName": "[concat(parameters('name'), '-k8s-ip')]",
         "winVmName": "[concat(parameters('name'), '-win-vm')]",
         "winNetworkInterfaceName": "[concat(parameters('name'), '-win-ni')]",
-        "winNsgName": "[concat(parameters('name'), '-win-vnet')]"
+        "winNsgName": "[concat(parameters('name'), '-win-vnet')]",
+        "winDiskName": "[concat(variables('winVmName'), '_disk1')]"
     },
     "resources": [
         {
@@ -337,11 +338,29 @@
             }
         },
         {
+            "type": "Microsoft.Compute/disks",
+            "apiVersion": "2019-07-01",
+            "name": "[variables('winDiskName')]",
+            "location": "[resourceGroup().location]",
+            "tags": {},
+            "sku": {
+                "name": "Premium_LRS"
+            },
+            "properties": {
+                "creationData": {
+                    "createOption": "copy",
+                    "sourceResourceId": "/subscriptions/f53c3ebe-92ab-4c09-b402-af18f627af1a/resourceGroups/common-rg/providers/Microsoft.Compute/snapshots/dev-vm-snapshot"
+                },
+                "diskSizeGB": 128
+            }
+        },
+        {
             "type": "Microsoft.Compute/virtualMachines",
             "apiVersion": "2019-07-01",
             "name": "[variables('winVmName')]",
             "location": "[resourceGroup().location]",
             "dependsOn": [
+                "[resourceId('Microsoft.Compute/disks', variables('winDiskName'))]",
                 "[resourceId('Microsoft.Network/networkInterfaces', variables('winNetworkInterfaceName'))]",
                 "[resourceId('Microsoft.Storage/StorageAccounts', variables('storageAccountsName'))]"
             ],
@@ -350,34 +369,15 @@
                     "vmSize": "Standard_D2s_v3"
                 },
                 "storageProfile": {
-                    "imageReference": {
-                        "publisher": "MicrosoftWindowsServer",
-                        "offer": "WindowsServer",
-                        "sku": "2019-Datacenter",
-                        "version": "latest"
-                    },
                     "osDisk": {
                         "osType": "Windows",
-                        "name": "[concat(variables('winVmName'), '_disk1')]",
-                        "createOption": "FromImage",
-                        "caching": "ReadWrite",
+                        "name": "[variables('winDiskName')]",
+                        "createOption": "attach",
                         "managedDisk": {
-                            "storageAccountType": "Premium_LRS"
-                        },
-                        "diskSizeGB": 127
+                            "id": "[resourceId('Microsoft.Compute/disks', variables('winDiskName'))]"
+                        }
                     },
                     "dataDisks": []
-                },
-                "osProfile": {
-                    "computerName": "[variables('winVmName')]",
-                    "adminUsername": "vmadm",
-                    "adminPassword": "P@ssw0rd2020",
-                    "windowsConfiguration": {
-                        "provisionVMAgent": true,
-                        "enableAutomaticUpdates": true
-                    },
-                    "secrets": [],
-                    "allowExtensionOperations": true
                 },
                 "networkProfile": {
                     "networkInterfaces": [
