@@ -13,7 +13,10 @@
         "storageAccountsName": "[concat(parameters('name'), 'k8sdiagsa')]",
         "bastionName": "[concat(parameters('name'), '-k8s-bastion')]",
         "nsgName": "[concat(parameters('name'), '-k8s-nsg')]",
-        "ipName": "[concat(parameters('name'), '-k8s-ip')]"
+        "ipName": "[concat(parameters('name'), '-k8s-ip')]",
+        "winVmName": "[concat(parameters('name'), '-win-vm')]",
+        "winNetworkInterfaceName": "[concat(parameters('name'), '-win-ni')]",
+        "winNsgName": "[concat(parameters('name'), '-win-vnet')]"
     },
     "resources": [
         {
@@ -60,17 +63,7 @@
                         "10.0.0.0/16"
                     ]
                 },
-                "subnets": [
-                    {
-                        "name": "default",
-                        "properties": {
-                            "addressPrefix": "10.0.0.0/24",
-                            "delegations": [],
-                            "privateEndpointNetworkPolicies": "Enabled",
-                            "privateLinkServiceNetworkPolicies": "Enabled"
-                        }
-                    }
-                ],
+                "subnets": [],
                 "virtualNetworkPeerings": [],
                 "enableDdosProtection": false,
                 "enableVmProtection": false
@@ -95,7 +88,8 @@
             "apiVersion": "2020-05-01",
             "name": "[concat(variables('vnetName'), '/AzureBastionSubnet')]",
             "dependsOn": [
-                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'default')]"
             ],
             "properties": {
                 "addressPrefix": "10.0.1.0/27",
@@ -262,6 +256,142 @@
                         }
                     }
                 ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2020-05-01",
+            "name": "[variables('winNsgName')]",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "RDP",
+                        "properties": {
+                            "protocol": "TCP",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "3389",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 300,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "Port_80",
+                        "properties": {
+                            "protocol": "*",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "80",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 320,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2020-05-01",
+            "name": "[variables('winNetworkInterfaceName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('winNsgName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'default')]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAddress": "10.0.0.5",
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'default')]"
+                            },
+                            "primary": true,
+                            "privateIPAddressVersion": "IPv4"
+                        }
+                    }
+                ],
+                "dnsSettings": {
+                    "dnsServers": []
+                },
+                "enableAcceleratedNetworking": false,
+                "enableIPForwarding": false,
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('winNsgName'))]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2019-07-01",
+            "name": "[variables('winVmName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', variables('winNetworkInterfaceName'))]",
+                "[resourceId('Microsoft.Storage/StorageAccounts', variables('storageAccountsName'))]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "Standard_D2s_v3"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "MicrosoftWindowsServer",
+                        "offer": "WindowsServer",
+                        "sku": "2019-Datacenter",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "osType": "Windows",
+                        "name": "[concat(variables('winVmName'), '_disk1')]",
+                        "createOption": "FromImage",
+                        "caching": "ReadWrite",
+                        "managedDisk": {
+                            "storageAccountType": "Premium_LRS"
+                        },
+                        "diskSizeGB": 127
+                    },
+                    "dataDisks": []
+                },
+                "osProfile": {
+                    "computerName": "[variables('winVmName')]",
+                    "adminUsername": "vmadm",
+                    "adminPassword": "P@ssw0rd2020",
+                    "windowsConfiguration": {
+                        "provisionVMAgent": true,
+                        "enableAutomaticUpdates": true
+                    },
+                    "secrets": [],
+                    "allowExtensionOperations": true
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('winNetworkInterfaceName'))]"
+                        }
+                    ]
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true,
+                        "storageUri": "[concat('https://', variables('storageAccountsName'), '.blob.core.windows.net/')]"
+                    }
+                }
             }
         }
     ]
