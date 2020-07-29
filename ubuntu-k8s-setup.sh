@@ -34,6 +34,6 @@ echo "deb https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt
 sudo apt-get update
 sudo apt-get install --yes helm
 # Repo
-curl -LOk https://github.com/denadr/SpringTCH16Demo/archive/master.zip
+curl -LOk https://github.com/denadr/aks-workshop/archive/master.zip
 unzip master.zip -d .
-cd SpringTCH16Demo-master
+cd aks-workshop-master
